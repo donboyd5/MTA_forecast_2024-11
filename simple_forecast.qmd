@@ -1,0 +1,279 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Simple forecast of tax revenue
+
+## Setup
+
+Libraries
+
+```{r}
+#| label: setup
+#| include: false
+
+source(here::here("r", "libraries.r"))
+source(here::here("r", "libraries_ts.r"))
+source(here::here("r", "constants.r"))
+source(here::here("r", "functions.r"))
+
+```
+
+Locations
+
+```{r}
+#| label: locations
+#| include: false
+
+fs_dir <- here::here("forecast_2024-06")  # forecast-specific folder
+fs_data <- path(fs_dir, "data_this_forecast") # forecast-specific data folder
+
+res_dir <- path(fs_dir, "results_this_forecast")
+
+```
+
+
+## Get previously updated tax data from OpenData
+
+
+```{r}
+#| label: get-opendata-taxdata
+#| eval: false
+#| include: false
+
+pmt1 <- readRDS(here::here("data", "mta_pmt_collections.rds"))
+count(pmt1, vname)
+glimpse(pmt1)
+
+# calculate pmt total
+pmt2 <- pmt1 |> 
+  filter(vname %in% c("pmt_nese_net", "pmt_wage")) |> 
+  summarise(value=sum(value), .by=c(date, year, month)) |> 
+  mutate(vname="pmt")
+summary(pmt2)
+
+pmt3 <- bind_rows(
+  pmt1 |> 
+    filter(vname %in% c("pmt_nese_net", "pmt_wage", "whnys")) |> 
+    select(date, year, month, vname, value),
+  pmt2) |> 
+  filter(date >= "2009-10-01") |> 
+  mutate(vname=case_when(vname=="pmt_nese_net" ~ "setax",
+                         vname=="pmt_wage" ~ "wagetax",
+                         TRUE ~ vname)) |> 
+  arrange(vname, date)
+#   mutate(pch=value / lag(value, 12) - 1, .by=vname)
+
+
+
+```
+
+## Add an estimate of May 2024, based on David Keller's email
+
+The workboook "AP043 2024 05.xlsx" David Keller provided by email on June 11, 2024 showed total distributions to MTA to be made in June, for May collections, of $258.933 million. I assume:
+
+-   Tax Department collections in May were therefore $258.933 million
+-   Net self-employment earnings tax was $5 million, based on a rough review of prior May collectionws
+-   Wage tax collections accounted for the remainder, $253.933 million
+
+I add these estimates of May 2024 collections to the revenue estimate. Save this temporary version of the data as pmt_extended.rds, in my forecast-specific folder, not the main data folder.
+
+```{r}
+#| label: add-May-estimate
+#| eval: false
+#| include: false
+
+mayestimate <- read_csv(
+"date, year, month, vname, value
+2024-05-01, 2024, 5, pmt, 258933
+2024-05-01, 2024, 5, setax, 5000
+2024-05-01, 2024, 5, wagetax, 253933
+")
+
+pmt4 <- bind_rows(pmt3, mayestimate) |> 
+  arrange(vname, date) 
+#   mutate(pch=value / lag(value, 12) - 1, .by=vname)
+
+pmt4 |> 
+  filter(date >= "2024-01-01")
+
+saveRDS(pmt4, path(fs_data, "pmt_extended.rds"))
+
+```
+
+## Get latest IHS economic forecast for the region
+
+Latest available IHS economic forecast is May 2024, provided by MTA (David Keller) in the file "Regional Forecast May 2024.xlsx".
+
+Quarterly wage foreasts are consolidated in a tab called "PMT", presumably prepared by the MTA.
+
+
+```{r}
+#| label: get-IHS-forecast
+#| eval: false
+#| include: false
+
+# fpath <- r"(E:\R_projects\MTA\MTA_forecast\forecast_2024-06\data\boyd_analysis_for_July2024_finplan.xlsx)"
+fpath <- path(fs_data, "Regional Forecast May 2024.xlsx")
+
+stubcols <- "e24:dx24"
+datacols <- "e33:dx33"
+
+stubs <- read_excel(fpath, sheet="PMT", range=stubcols, col_names=TRUE)
+names(stubs)
+
+data <- read_excel(fpath, sheet="PMT", range=datacols, col_names=names(stubs))
+names(stubs)
+
+ihs <- data |> 
+  pivot_longer(cols=everything(), names_to = "date", values_to = "wages") |> 
+  mutate(date=yq(date))
+glimpse(ihs)
+summary(ihs)
+skim(ihs)
+
+ihs |> 
+  ggplot(aes(date, wages)) +
+  geom_line() +
+  geom_point()
+
+ihs |> 
+  ggplot(aes(date, wages)) +
+  geom_line() +
+  geom_point()
+
+year_breaks <- seq(as.Date("1990-01-01"), as.Date("2050-01-01"), by = "2 years")
+
+p <- ihs |> 
+  arrange(date) |> 
+  mutate(pchya=wages / lag(wages, 4) - 1) |> 
+  filter(!is.na(pchya)) |> 
+  ggplot(aes(date, pchya)) +
+  geom_line(colour="blue") +
+  geom_point(colour="blue", size=0.75) +
+  geom_hline(yintercept = 0) +
+  scale_y_continuous(name=NULL, breaks = seq(-1, 1, .02), labels = scales::percent_format(accuracy=1)) +
+  scale_x_date(name=NULL, breaks = year_breaks, labels = scales::date_format("%Y")) +
+  ggtitle("IHS May 2024 Forecast of quarterly MTA-region wages, year-over-year growth") +
+  labs(caption="Source: Regional Forecast May 2024.xlsx, sheet=PMT") +
+  theme_bw() +
+  caption_left
+p
+
+ggsave(path(res_dir, "ihs_wages_pchya.png"), plot=p, width=11, height=5, scale=1)
+
+```
+
+
+## Seasonplot for wages
+
+```{r}
+#| label: season-plot
+#| eval: true
+#| include: false
+
+pmtx <- readRDS(path(fs_data, "pmt_extended.rds"))
+
+pdata <- pmtx |> 
+  filter(vname=="wagetax", date>="2019-01-01") |> 
+  mutate(month=factor(month, levels=1:12, labels=month.abb))
+
+hlines <- pdata |> 
+  filter(date < "2023-07-01") |> 
+  summarise(n=n(), mean=mean(value), .by=month)
+hlines
+
+p <- pdata |> 
+  ggplot(aes(year, value)) +
+  geom_line(colour="blue") +
+  geom_point(colour="blue") +
+  facet_wrap(~month, nrow=1) +
+  scale_x_continuous(name=NULL, breaks = 2019:2024, limits = c(2019, 2024)) +
+  scale_y_continuous(name="$ millions", breaks = seq(0, 400e3, 20e3), labels = scales::comma_format(scale=1e-3, accuracy=1)) +
+  geom_hline(aes(yintercept = mean), colour="darkgreen", data = hlines) +
+  ggtitle("PMT wage tax collections through May 2024 (estimated)",
+          subtitle="Horizontal line is average for same month from 2019 through last month without tax increase") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = -90, vjust = 0.5))
+p
+
+ggsave(path(res_dir, "wage_facets.png"), plot=p, width=11, height=5, scale=1)
+
+```
+
+
+
+```{r}
+#| label: get-data
+#| eval: true
+#| include: false
+
+pmtx <- readRDS(path(fs_data, "pmt_extended.rds"))
+glimpse(pmtx)
+summary(pmtx)
+count(pmt, vname)
+
+# get IHS wage estimates
+# fpath <- here::here("data", "boyd_analysis_for_July2024_finplan.xlsx")
+fpath <- r"(E:\R_projects\MTA\MTA_forecast\forecast_2024-06\data\boyd_analysis_for_July2024_finplan.xlsx)"
+ihs1 <- read_excel(fpath, sheet="econ", range="a4:n128")
+glimpse(ihs1)
+
+ihs <- ihs1 |> 
+  select(qdate=1, wages=Total) |> 
+  mutate(date=yq(qdate)) |> 
+  select(date, wages) |> # May 2024 IHS wage levels
+  arrange(date)
+summary(ihs)
+
+# data file for modeling the pmt wage tax
+wtaxq <- pmt |> 
+  filter(vname=="wagetax", date >= "2009-10-01") |> 
+  select(date, wagetax=value) |> 
+  mutate(date=floor_date(date, "quarter")) |> 
+  summarise(wagetax=sum(wagetax), .by=date) |> 
+  arrange(date)
+
+data <- wtaxq |> 
+  right_join(ihs |> 
+               filter(date >="2009-10-01"), by = join_by(date)) |> 
+  mutate(dfirstq=(date == "2023-07-01")*1.0,
+         dincrease=(date >= "2023-07-01")*1.0,
+         wagetax=ifelse(date=="2024-04-01", 708958, wagetax)) |> 
+  arrange(date)
+
+ht(data)
+
+mod1 <- lm(log(wagetax) ~ log(wages) + dfirstq + dincrease, data = data |> filter(date <= "2024-04-01"))
+summary(mod1)
+
+(pch <- exp(0.6863) - 1)
+
+mod2 <- lm(log(wagetax) ~ log(wages) + dincrease, 
+           data = data |>
+             filter(date <= "2024-04-01"))
+summary(mod2)
+(pch <- exp(0.5746) - 1) # gives 77.6% increase; plausible upper bound is about 62% I'd say
+
+```
+
+
+```{r}
+
+# i'm examining a monthly withholding tax that had a rate increase and base change in August 2023. i have monthly tax data for 4 years prior and 8 months of the increased tax. I have quarterly wage data for the same period. i'd like to estimate how much revenue the tax increase raised. one approach might be to regress the log of tax revenue on the log of wages and include a dummy variable for the period of the tax increase, and use the dummy to infer the tax increase. are there better ways
+
+# Load necessary package
+library(lmtest)
+
+# Run the regression model
+model <- lm(log(Tax_Revenue) ~ log(Wages) + Post_Tax_Change, data = data)
+summary(model)
+
+
+
+
+```
+
+

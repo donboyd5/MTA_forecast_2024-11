@@ -1,0 +1,55 @@
+# Introduction
+
+## Organization
+
+-   Keep data sources used in every forecast in the main data folder for the project, not in the folder for a specific forecast. This includes:
+
+    -   Department of Taxation and Finance seamless data file of monthly collections.
+
+    -   Department of Taxation and Finance monthly spreadsheets.
+
+    -   NYS DOL QCEW data found here.
+
+-   Keep idiosyncratic data sources for a specific forecast, such as spreadsheets from MTA, in a data folder for the forecast.
+
+## Overview
+
+<!-- -   Forecast pre-July-law PMT wage tax as a function of wages - quarterly then convert to monthly -->
+
+<!--     - Develop separate wage forecasts for NYC and suburban counties, based on (1) review of available forecasts and (2) time-series approaches -->
+
+<!--     -   Convert the quarterly wage forecasts into monthly based on historical patterns -->
+
+<!--     -   Split the monthly wage tax into NYC and suburban components, based on splits in the quarterly wage data -->
+
+<!-- -   Forecast monthly July+ PMT wage tax by estimating the additional NYC tax -->
+
+<!--     -   Start with monthly NYC wage tax estimates from above -->
+
+<!--     -   Estimate increase in NYC, allowing for some slippage in July -->
+
+### Timing
+
+-   MTA generally receives Tax Department collections in the month following collections, in **MTA receipts months of February through November**. For example, in November, MTA receives approximately Tax Department collections for October.
+
+-   However, in December, MTA receives November Tax Department collections plus an estimate of some share of December collections (I do not know how December MTA receipts are determined), making December a large month for the MTA.
+
+-   Then, in January, MTA receives what little remains of December Tax Department collections, so January is a low month for MTA.
+
+-   And then in February through November MTA receives, approximately, Tax Department collections for January through October.
+
+The table below shows Tax Department receipts (from OpenData) and MTA collections (from a David Keller workbook) for late 2023 through early 2024:
+
+![](images/clipboard-1832790469.png)
+
+## Steps
+
+<!-- -   Get and clean historical PMT and related data -->
+
+<!-- -   Get and clean economic data -->
+
+<!-- -   Examine recent trends -->
+
+<!-- -   Forecast revenue **collections** -->
+
+<!-- For **deposits to MMTOA**, assume payroll tax is lagged one month, and net self-employment earnings tax is on the PIT estimated payment schedule (see discussion in the 2023 tax increase section). -->

@@ -1,0 +1,55 @@
+project:
+  type: book
+  output-dir: _forecast_Nov2024
+
+# quarto publish netlify --no-render
+# quarto publish netlify --no-browser --no-prompt
+# quarto publish netlify --no-render --no-browser --no-prompt
+
+execute:
+  eval: true
+  echo: true
+  output: true
+  freeze: auto
+  
+editor_options:
+  chunk_output_type: console
+
+format:
+  html:
+    theme: cosmo
+    fig-width: 8
+    fig-height: 8
+    code-fold: true
+  # pdf:
+  #   documentclass: scrreprt
+
+book:
+  title: "PMT analysis to assist with July 2024 forecast"
+  author: "Don Boyd"
+  date: today
+  date-format: long
+  chapters:
+    - index.qmd
+    - part: "Data preparation"
+      chapters:
+        - simple_forecast.qmd
+        # - get_and_clean_tax_data.qmd
+        # - get_and_clean_economic_data.qmd
+
+# bibliography: _baseline.bib
+# nocite: |
+#   @*
+
+
+# https://quarto.org/docs/computations/execution-options.html    
+# for cell options: https://quarto.org/docs/reference/cells/cells-knitr.html
+# execute:
+#   freeze: auto  # re-render only when source changes  
+  
+# The computational results of documents executed with freeze are stored in the
+# _freeze directory, and re-used when needed to fulfill document renders. You
+# should check the contents of _freeze into version control so that others 
+# rendering the project don’t need to reproduce your computational environment
+# to render it in their environment.  
+
